@@ -43,6 +43,9 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateMixin {
   bool _visible = false;
   double _titleScale = 0.5;
+  late AnimationController _menuController;
+  late Animation<double> _menuScaleAnimation;
+  late Animation<Offset> _slideAnimation;
 
   // Helper method to get dummy high scores
   List<ScoreData> _getHighScores() {
@@ -60,13 +63,29 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
-    // Trigger animations after build
+    _menuController = AnimationController(duration: const Duration(milliseconds: 800), vsync: this);
+
+    _menuScaleAnimation = CurvedAnimation(parent: _menuController, curve: Curves.elasticOut);
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.5),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _menuController, curve: Curves.easeOutCubic));
+
+    // Start animations after build
     Future.delayed(const Duration(milliseconds: 200), () {
       setState(() {
         _visible = true;
         _titleScale = 1.0;
       });
+      _menuController.forward();
     });
+  }
+
+  @override
+  void dispose() {
+    _menuController.dispose();
+    super.dispose();
   }
 
   @override
@@ -81,78 +100,76 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             // Animated Game title
-            AnimatedScale(
-              duration: const Duration(milliseconds: 800),
-              scale: _titleScale,
-              curve: Curves.elasticOut,
+            ScaleTransition(
+              scale: _menuScaleAnimation,
               child: const Text('GALAGA', style: TextStyle(fontSize: 48, color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 8)),
             ),
 
-            // Animated High Scores ListView
-            AnimatedOpacity(
-              duration: const Duration(milliseconds: 800),
-              opacity: _visible ? 1.0 : 0.0,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 800),
-                curve: Curves.easeOut,
-                margin: const EdgeInsets.symmetric(vertical: 20),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.blue.withOpacity(_visible ? 0.5 : 0.0)),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                height: 200,
-                width: 300,
-                child: Column(
-                  children: [
-                    const Text('High Scores', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 10),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: highScores.length,
-                        itemBuilder: (context, index) {
-                          final score = highScores[index];
-                          return Container(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            decoration: BoxDecoration(color: index.isEven ? Colors.blue.withOpacity(0.1) : Colors.transparent),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text('#${index + 1}', style: const TextStyle(color: Colors.white70)),
-                                Text('${score.score}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                Text(score.date, style: const TextStyle(color: Colors.white70)),
-                              ],
-                            ),
-                          );
-                        },
+            // Animated High Scores ListView with slide effect
+            SlideTransition(
+              position: _slideAnimation,
+              child: FadeTransition(
+                opacity: _menuScaleAnimation,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 20),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.blue.withOpacity(_visible ? 0.5 : 0.0)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  height: 200,
+                  width: 300,
+                  child: Column(
+                    children: [
+                      const Text('High Scores', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 10),
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: highScores.length,
+                          itemBuilder: (context, index) {
+                            final score = highScores[index];
+                            return Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(color: index.isEven ? Colors.blue.withOpacity(0.1) : Colors.transparent),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('#${index + 1}', style: const TextStyle(color: Colors.white70)),
+                                  Text('${score.score}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                  Text(score.date, style: const TextStyle(color: Colors.white70)),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
 
-            // Animated Start Game button
-            AnimatedOpacity(
-              duration: const Duration(milliseconds: 800),
-              opacity: _visible ? 1.0 : 0.0,
-              child: Container(
-                margin: const EdgeInsets.all(20),
-                child: ElevatedButton(
-                  onPressed: () => Navigator.of(context).pushNamed('/game'),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15)),
-                  child: const Text('START GAME', style: TextStyle(fontSize: 24, letterSpacing: 2, color: Colors.white)),
+            // Animated Start Game button with scale and slide
+            SlideTransition(
+              position: _slideAnimation,
+              child: ScaleTransition(
+                scale: _menuScaleAnimation,
+                child: Container(
+                  margin: const EdgeInsets.all(20),
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).pushNamed('/game'),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15)),
+                    child: const Text('START GAME', style: TextStyle(fontSize: 24, letterSpacing: 2, color: Colors.white)),
+                  ),
                 ),
               ),
             ),
 
-            // Animated Game Instructions
-            AnimatedSlide(
-              duration: const Duration(milliseconds: 800),
-              offset: _visible ? Offset.zero : const Offset(0, 0.2),
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 800),
-                opacity: _visible ? 1.0 : 0.0,
+            // Animated Game Instructions with slide effect
+            SlideTransition(
+              position: _slideAnimation,
+              child: FadeTransition(
+                opacity: _menuScaleAnimation,
                 child: Container(
                   margin: const EdgeInsets.only(top: 20),
                   padding: const EdgeInsets.all(20),

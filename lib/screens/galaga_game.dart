@@ -91,6 +91,7 @@ class _GalagaGameState extends State<GalagaGame> with SingleTickerProviderStateM
   List<Offset> stars = []; // For starfield effect
   Timer? gameTimer;
   bool isGameOver = false;
+  bool isPaused = false;
 
   // Difficulty settings
   double baseEnemySpeed = 0.001;
@@ -156,7 +157,7 @@ class _GalagaGameState extends State<GalagaGame> with SingleTickerProviderStateM
 
   /// Updates game state including difficulty progression
   void updateGame() {
-    if (isGameOver) return;
+    if (isGameOver || isPaused) return;
 
     setState(() {
       // Update stars
@@ -219,6 +220,18 @@ class _GalagaGameState extends State<GalagaGame> with SingleTickerProviderStateM
     });
   }
 
+  /// Toggles game pause state
+  void togglePause() {
+    setState(() {
+      isPaused = !isPaused;
+      if (isPaused) {
+        gameTimer?.cancel();
+      } else {
+        gameTimer = Timer.periodic(const Duration(milliseconds: 16), (_) => updateGame());
+      }
+    });
+  }
+
   @override
   void dispose() {
     gameTimer?.cancel();
@@ -245,7 +258,24 @@ class _GalagaGameState extends State<GalagaGame> with SingleTickerProviderStateM
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Lives: 3', style: TextStyle(color: Colors.white, fontSize: 18)),
+                // Replace Lives with Pause/Exit buttons
+                Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(isPaused ? Icons.play_arrow : Icons.pause, color: Colors.white),
+                      onPressed: togglePause,
+                      tooltip: isPaused ? 'Resume Game' : 'Pause Game',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.exit_to_app, color: Colors.white),
+                      onPressed: () {
+                        gameTimer?.cancel();
+                        Navigator.of(context).pop();
+                      },
+                      tooltip: 'Exit to Menu',
+                    ),
+                  ],
+                ),
                 Text('High Score: ${score > 0 ? score : 0}', style: const TextStyle(color: Colors.white, fontSize: 18)),
               ],
             ),
@@ -255,124 +285,139 @@ class _GalagaGameState extends State<GalagaGame> with SingleTickerProviderStateM
           Expanded(
             child: GestureDetector(
               onHorizontalDragUpdate: (details) {
-                setState(() {
-                  playerX += details.delta.dx / gameWidth * 2;
-                  playerX = playerX.clamp(-0.8, 0.8);
-                });
+                if (!isPaused) {
+                  setState(() {
+                    playerX += details.delta.dx / gameWidth * 2;
+                    playerX = playerX.clamp(-0.8, 0.8);
+                  });
+                }
               },
-              onTapDown: (_) => shoot(),
-              child: Container(
-                margin: const EdgeInsets.all(10),
-                decoration: BoxDecoration(border: Border.all(color: Colors.blue.withOpacity(0.5), width: 2), color: Colors.black),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    gameWidth = constraints.maxWidth;
-                    gameHeight = constraints.maxHeight;
-                    return Stack(
-                      children: [
-                        // Starfield
-                        ...stars.map(
-                          (star) => Positioned(
-                            top: (gameHeight / 2) + (star.dy * gameHeight / 2),
-                            left: (gameWidth / 2) + (star.dx * gameWidth / 2),
-                            child: Container(
-                              width: 2,
-                              height: 2,
-                              decoration: BoxDecoration(color: Colors.white.withOpacity(0.8), shape: BoxShape.circle),
-                            ),
-                          ),
-                        ),
-
-                        // Player Ship
-                        Positioned(
-                          bottom: 20,
-                          left: (gameWidth / 2) + (playerX * gameWidth / 2) - playerWidth / 2,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            width: playerWidth,
-                            height: playerHeight,
-                            decoration: BoxDecoration(
-                              color: Colors.blue,
-                              borderRadius: BorderRadius.circular(10),
-                              boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.5), spreadRadius: 2, blurRadius: 5)],
-                            ),
-                          ),
-                        ),
-
-                        // Bullets and Enemies
-                        ...bullets.map(
-                          (b) => Positioned(
-                            top: b.dy * gameHeight,
-                            left: (gameWidth / 2) + (b.dx * gameWidth / 2) - 2,
-                            child: Container(
-                              width: 4,
-                              height: 10,
-                              decoration: BoxDecoration(
-                                color: Colors.yellow,
-                                boxShadow: [BoxShadow(color: Colors.yellow.withOpacity(0.5), spreadRadius: 1, blurRadius: 3)],
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        ...enemies.map(
-                          (e) => Positioned(
-                            top: (gameHeight / 2) + (e.dy * gameHeight / 2) - 15,
-                            left: (gameWidth / 2) + (e.dx * gameWidth / 2) - 15,
-                            child: Container(
-                              width: 30,
-                              height: 30,
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(6),
-                                boxShadow: [BoxShadow(color: Colors.red.withOpacity(0.5), spreadRadius: 2, blurRadius: 5)],
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        // Game Over Overlay with Level Display
-                        if (isGameOver)
-                          FadeTransition(
-                            opacity: _fadeIn,
-                            child: Container(
-                              color: Colors.black.withOpacity(0.8),
-                              child: Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Text('GAME OVER', style: TextStyle(fontSize: 48, color: Colors.white, fontWeight: FontWeight.bold)),
-                                    const SizedBox(height: 20),
-                                    Text('Final Level: $level', style: const TextStyle(fontSize: 24, color: Colors.white)),
-                                    const SizedBox(height: 10),
-                                    Text('Final Score: $score', style: const TextStyle(fontSize: 24, color: Colors.white)),
-                                    const SizedBox(height: 30),
-                                    ElevatedButton(
-                                      onPressed: () {
-                                        setState(() {
-                                          isGameOver = false;
-                                          score = 0;
-                                          enemies.clear();
-                                          bullets.clear();
-                                          playerX = 0;
-                                          startGame();
-                                        });
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.blue,
-                                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                                      ),
-                                      child: const Text('Play Again', style: TextStyle(fontSize: 20)),
-                                    ),
-                                  ],
+              onTapDown: (_) => !isPaused ? shoot() : null,
+              child: Stack(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(border: Border.all(color: Colors.blue.withOpacity(0.5), width: 2), color: Colors.black),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        gameWidth = constraints.maxWidth;
+                        gameHeight = constraints.maxHeight;
+                        return Stack(
+                          children: [
+                            // Starfield
+                            ...stars.map(
+                              (star) => Positioned(
+                                top: (gameHeight / 2) + (star.dy * gameHeight / 2),
+                                left: (gameWidth / 2) + (star.dx * gameWidth / 2),
+                                child: Container(
+                                  width: 2,
+                                  height: 2,
+                                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.8), shape: BoxShape.circle),
                                 ),
                               ),
                             ),
-                          ),
-                      ],
-                    );
-                  },
-                ),
+
+                            // Player Ship
+                            Positioned(
+                              bottom: 20,
+                              left: (gameWidth / 2) + (playerX * gameWidth / 2) - playerWidth / 2,
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                width: playerWidth,
+                                height: playerHeight,
+                                decoration: BoxDecoration(
+                                  color: Colors.blue,
+                                  borderRadius: BorderRadius.circular(10),
+                                  boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.5), spreadRadius: 2, blurRadius: 5)],
+                                ),
+                              ),
+                            ),
+
+                            // Bullets and Enemies
+                            ...bullets.map(
+                              (b) => Positioned(
+                                top: b.dy * gameHeight,
+                                left: (gameWidth / 2) + (b.dx * gameWidth / 2) - 2,
+                                child: Container(
+                                  width: 4,
+                                  height: 10,
+                                  decoration: BoxDecoration(
+                                    color: Colors.yellow,
+                                    boxShadow: [BoxShadow(color: Colors.yellow.withOpacity(0.5), spreadRadius: 1, blurRadius: 3)],
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            ...enemies.map(
+                              (e) => Positioned(
+                                top: (gameHeight / 2) + (e.dy * gameHeight / 2) - 15,
+                                left: (gameWidth / 2) + (e.dx * gameWidth / 2) - 15,
+                                child: Container(
+                                  width: 30,
+                                  height: 30,
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    borderRadius: BorderRadius.circular(6),
+                                    boxShadow: [BoxShadow(color: Colors.red.withOpacity(0.5), spreadRadius: 2, blurRadius: 5)],
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            // Pause Overlay
+                            if (isPaused)
+                              Container(
+                                color: Colors.black.withOpacity(0.7),
+                                child: const Center(
+                                  child: Text('PAUSED', style: TextStyle(color: Colors.white, fontSize: 48, fontWeight: FontWeight.bold)),
+                                ),
+                              ),
+
+                            // Game Over Overlay with Level Display
+                            if (isGameOver)
+                              FadeTransition(
+                                opacity: _fadeIn,
+                                child: Container(
+                                  color: Colors.black.withOpacity(0.8),
+                                  child: Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const Text('GAME OVER', style: TextStyle(fontSize: 48, color: Colors.white, fontWeight: FontWeight.bold)),
+                                        const SizedBox(height: 20),
+                                        Text('Final Level: $level', style: const TextStyle(fontSize: 24, color: Colors.white)),
+                                        const SizedBox(height: 10),
+                                        Text('Final Score: $score', style: const TextStyle(fontSize: 24, color: Colors.white)),
+                                        const SizedBox(height: 30),
+                                        ElevatedButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              isGameOver = false;
+                                              score = 0;
+                                              enemies.clear();
+                                              bullets.clear();
+                                              playerX = 0;
+                                              startGame();
+                                            });
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.blue,
+                                            padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                                          ),
+                                          child: const Text('Play Again', style: TextStyle(fontSize: 20)),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
