@@ -1,30 +1,40 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:testing/main.dart';
+import '../lib/main.dart' as main_app;
+import '../lib/screens/galaga_game.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('Galaga Game Tests', () {
+    testWidgets('Game initializes correctly', (WidgetTester tester) async {
+      await tester.pumpWidget(MaterialApp(home: GalagaGame()));
+      await tester.pumpAndSettle();
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+      expect(find.text('Level 1'), findsOneWidget);
+      expect(find.text('Score: 0'), findsOneWidget);
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    testWidgets('Pause functionality works', (WidgetTester tester) async {
+      await tester.pumpWidget(MaterialApp(home: GalagaGame()));
+      await tester.pumpAndSettle();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.pause));
+      await tester.pump();
+
+      expect(find.text('PAUSED'), findsOneWidget);
+    });
+
+    testWidgets('Menu navigation works', (WidgetTester tester) async {
+      await tester.pumpWidget(main_app.MyApp());
+      await tester.pumpAndSettle();
+
+      expect(find.text('GALAGA'), findsOneWidget);
+      expect(find.text('START GAME'), findsOneWidget);
+
+      await tester.tap(find.text('START GAME'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(GalagaGame), findsOneWidget);
+    });
   });
 }

@@ -65,7 +65,7 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
     super.initState();
     _menuController = AnimationController(duration: const Duration(milliseconds: 800), vsync: this);
 
-    _menuScaleAnimation = CurvedAnimation(parent: _menuController, curve: Curves.elasticOut);
+    _menuScaleAnimation = CurvedAnimation(parent: _menuController, curve: Curves.elasticOut).drive(Tween<double>(begin: _titleScale, end: 1.0));
 
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.5),

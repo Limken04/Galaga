@@ -72,17 +72,25 @@ class HomeScreen extends StatelessWidget {
 /// Main Galaga game screen with stateful behavior
 class GalagaGame extends StatefulWidget {
   const GalagaGame({super.key});
+
   @override
   State<GalagaGame> createState() => _GalagaGameState();
 }
 
-class _GalagaGameState extends State<GalagaGame> with SingleTickerProviderStateMixin {
+class _GalagaGameState extends State<GalagaGame> with TickerProviderStateMixin {
   // Game state variables
   double playerX = 0.0;
   final double playerWidth = 50.0;
   final double playerHeight = 50.0;
   late double gameWidth;
   late double gameHeight;
+
+  // Animation controllers
+  late AnimationController _shipController;
+  late AnimationController _bulletController;
+  late Animation<double> _shipHoverAnimation;
+  late AnimationController _controller;
+  late Animation<double> _fadeIn;
 
   int score = 0;
   int level = 1;
@@ -97,16 +105,26 @@ class _GalagaGameState extends State<GalagaGame> with SingleTickerProviderStateM
   double baseEnemySpeed = 0.001;
   double enemySpeedMultiplier = 1.0;
 
-  // Animation controller for Game Over fade-in
-  late AnimationController _controller;
-  late Animation<double> _fadeIn;
+  // Add list to store active explosion widgets
+  final List<Widget> _explosions = [];
 
   @override
   void initState() {
     super.initState();
+
+    // Initialize ship hover animation
+    _shipController = AnimationController(duration: const Duration(milliseconds: 1500), vsync: this)..repeat(reverse: true);
+
+    _shipHoverAnimation = Tween<double>(begin: -2.0, end: 2.0).animate(CurvedAnimation(parent: _shipController, curve: Curves.easeInOut));
+
+    // Initialize bullet animation
+    _bulletController = AnimationController(duration: const Duration(milliseconds: 300), vsync: this);
+
+    // Initialize game over fade animation
     _controller = AnimationController(duration: const Duration(milliseconds: 600), vsync: this);
     _fadeIn = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
-    _initStars(); // Initialize starfield
+
+    _initStars();
     startGame();
   }
 
@@ -197,9 +215,11 @@ class _GalagaGameState extends State<GalagaGame> with SingleTickerProviderStateM
     for (var i = bullets.length - 1; i >= 0; i--) {
       for (var j = enemies.length - 1; j >= 0; j--) {
         if ((bullets[i].dx - enemies[j].dx).abs() < 0.1 && (bullets[i].dy - enemies[j].dy).abs() < 0.1) {
+          final position = enemies[j];
           bullets.removeAt(i);
           enemies.removeAt(j);
           score += 10;
+          _triggerEnemyExplosion(position);
           break;
         }
       }
@@ -215,9 +235,12 @@ class _GalagaGameState extends State<GalagaGame> with SingleTickerProviderStateM
 
   /// Shoots a bullet from the player's current position
   void shoot() {
-    setState(() {
-      bullets.add(Offset(playerX, 0.8));
-    });
+    if (!isPaused && !isGameOver) {
+      setState(() {
+        bullets.add(Offset(playerX, 0.8));
+        _bulletController.forward(from: 0);
+      });
+    }
   }
 
   /// Toggles game pause state
@@ -232,10 +255,55 @@ class _GalagaGameState extends State<GalagaGame> with SingleTickerProviderStateM
     });
   }
 
+  /// Add enemy explosion animation
+  void _triggerEnemyExplosion(Offset position) {
+    final explosionController = AnimationController(duration: const Duration(milliseconds: 500), vsync: this);
+
+    final scaleAnimation = Tween<double>(begin: 1.0, end: 2.0).animate(CurvedAnimation(parent: explosionController, curve: Curves.easeOut));
+
+    setState(() {
+      _explosions.add(
+        Positioned(
+          top: (gameHeight / 2) + (position.dy * gameHeight / 2) - 15,
+          left: (gameWidth / 2) + (position.dx * gameWidth / 2) - 15,
+          child: AnimatedBuilder(
+            animation: scaleAnimation,
+            builder: (context, child) {
+              return Transform.scale(
+                scale: scaleAnimation.value,
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(1 - scaleAnimation.value / 2),
+                    borderRadius: BorderRadius.circular(15),
+                    boxShadow: [
+                      BoxShadow(color: Colors.orange.withOpacity(0.5), spreadRadius: 5 * scaleAnimation.value, blurRadius: 7 * scaleAnimation.value),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    });
+
+    // Remove explosion after animation
+    explosionController.forward().then((_) {
+      setState(() {
+        _explosions.removeLast();
+      });
+      explosionController.dispose();
+    });
+  }
+
   @override
   void dispose() {
-    gameTimer?.cancel();
+    _shipController.dispose();
+    _bulletController.dispose();
     _controller.dispose();
+    gameTimer?.cancel();
     super.dispose();
   }
 
@@ -317,38 +385,57 @@ class _GalagaGameState extends State<GalagaGame> with SingleTickerProviderStateM
                               ),
                             ),
 
-                            // Player Ship
-                            Positioned(
-                              bottom: 20,
-                              left: (gameWidth / 2) + (playerX * gameWidth / 2) - playerWidth / 2,
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                width: playerWidth,
-                                height: playerHeight,
-                                decoration: BoxDecoration(
-                                  color: Colors.blue,
-                                  borderRadius: BorderRadius.circular(10),
-                                  boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.5), spreadRadius: 2, blurRadius: 5)],
-                                ),
-                              ),
-                            ),
-
-                            // Bullets and Enemies
-                            ...bullets.map(
-                              (b) => Positioned(
-                                top: b.dy * gameHeight,
-                                left: (gameWidth / 2) + (b.dx * gameWidth / 2) - 2,
-                                child: Container(
-                                  width: 4,
-                                  height: 10,
-                                  decoration: BoxDecoration(
-                                    color: Colors.yellow,
-                                    boxShadow: [BoxShadow(color: Colors.yellow.withOpacity(0.5), spreadRadius: 1, blurRadius: 3)],
+                            // Animated Player Ship
+                            AnimatedBuilder(
+                              animation: _shipHoverAnimation,
+                              builder: (context, child) {
+                                return Positioned(
+                                  bottom: 20 + _shipHoverAnimation.value,
+                                  left: (gameWidth / 2) + (playerX * gameWidth / 2) - playerWidth / 2,
+                                  child: Container(
+                                    width: playerWidth,
+                                    height: playerHeight,
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue,
+                                      borderRadius: BorderRadius.circular(10),
+                                      boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.5), spreadRadius: 2, blurRadius: 5)],
+                                    ),
                                   ),
-                                ),
+                                );
+                              },
+                            ),
+
+                            // Animated Bullets
+                            ...bullets.map(
+                              (b) => TweenAnimationBuilder<double>(
+                                tween: Tween<double>(begin: 1.2, end: 1.0),
+                                duration: const Duration(milliseconds: 200),
+                                builder:
+                                    (context, value, child) => Positioned(
+                                      top: b.dy * gameHeight,
+                                      left: (gameWidth / 2) + (b.dx * gameWidth / 2) - 2,
+                                      child: Transform.scale(
+                                        scale: value,
+                                        child: Container(
+                                          width: 4 * value,
+                                          height: 10,
+                                          decoration: BoxDecoration(
+                                            color: Colors.yellow,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.yellow.withOpacity(0.5 * value),
+                                                spreadRadius: 1 * value,
+                                                blurRadius: 3 * value,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                               ),
                             ),
 
+                            // Enemies
                             ...enemies.map(
                               (e) => Positioned(
                                 top: (gameHeight / 2) + (e.dy * gameHeight / 2) - 15,
@@ -364,6 +451,9 @@ class _GalagaGameState extends State<GalagaGame> with SingleTickerProviderStateM
                                 ),
                               ),
                             ),
+
+                            // Add explosions on top of other elements
+                            ..._explosions,
 
                             // Pause Overlay
                             if (isPaused)
