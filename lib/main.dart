@@ -25,7 +25,12 @@ class MyApp extends StatelessWidget {
       title: 'Galaga Game',
       theme: ThemeData.dark(), // Changed to dark theme
       debugShowCheckedModeBanner: false,
-      home: const MyHomePage(title: 'Galaga'),
+      // Define initial route and route mapping
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const MyHomePage(title: 'Galaga'),
+        '/game': (context) => const GalagaGame(),
+      },
     );
   }
 }
@@ -107,7 +112,7 @@ class MyHomePage extends StatelessWidget {
               margin: const EdgeInsets.all(20),
               child: ElevatedButton(
                 onPressed: () {
-                  Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GalagaGame()));
+                  Navigator.of(context).pushNamed('/game');
                 },
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15)),
                 child: const Text('START GAME', style: TextStyle(fontSize: 24, letterSpacing: 2, color: Colors.white)),
