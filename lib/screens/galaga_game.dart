@@ -1,19 +1,6 @@
 import 'dart:async';
 import 'dart:math';
-
 import 'package:flutter/material.dart';
-
-void main() => runApp(const MyApp());
-
-/// Root widget of the application
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(title: 'Galaga Game', theme: ThemeData.dark(), home: const HomeScreen(), debugShowCheckedModeBanner: false);
-  }
-}
 
 /// Home screen with game start menu
 class HomeScreen extends StatelessWidget {
@@ -105,22 +92,17 @@ class _GalagaGameState extends State<GalagaGame> with TickerProviderStateMixin {
   double baseEnemySpeed = 0.001;
   double enemySpeedMultiplier = 1.0;
 
-  // Add list to store active explosion widgets
   final List<Widget> _explosions = [];
 
   @override
   void initState() {
     super.initState();
-
-    // Initialize ship hover animation
     _shipController = AnimationController(duration: const Duration(milliseconds: 1500), vsync: this)..repeat(reverse: true);
 
     _shipHoverAnimation = Tween<double>(begin: -2.0, end: 2.0).animate(CurvedAnimation(parent: _shipController, curve: Curves.easeInOut));
 
-    // Initialize bullet animation
     _bulletController = AnimationController(duration: const Duration(milliseconds: 300), vsync: this);
 
-    // Initialize game over fade animation
     _controller = AnimationController(duration: const Duration(milliseconds: 600), vsync: this);
     _fadeIn = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
 
