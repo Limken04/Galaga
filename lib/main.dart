@@ -1,16 +1,8 @@
-import 'dart:collection'; // Added for SplayTreeSet
-
 import 'package:flutter/material.dart';
 
+import 'models/score_model.dart';
 import 'screens/galaga_game.dart';
-
-// Class to store score data
-class ScoreData {
-  final int score;
-  final String date;
-
-  ScoreData(this.score, this.date);
-}
+import 'services/score_service.dart';
 
 void main() {
   runApp(const MyApp());
@@ -46,25 +38,28 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
   late AnimationController _menuController;
   late Animation<double> _menuScaleAnimation;
   late Animation<Offset> _slideAnimation;
+  final ScoreService _scoreService = ScoreService();
+  List<ScoreData> highScores = [];
+  bool isLoading = false;
 
-  // Helper method to get dummy high scores
-  List<ScoreData> _getHighScores() {
-    final scores = SplayTreeSet<ScoreData>((a, b) => b.score.compareTo(a.score));
-    scores.addAll([
-      ScoreData(1000, '2024-04-30'),
-      ScoreData(850, '2024-04-29'),
-      ScoreData(720, '2024-04-28'),
-      ScoreData(500, '2024-04-27'),
-      ScoreData(350, '2024-04-26'),
-    ]);
-    return scores.take(5).toList();
+  Future<void> _fetchHighScores() async {
+    setState(() => isLoading = true);
+    try {
+      final scores = await _scoreService.fetchHighScores();
+      setState(() {
+        highScores = scores;
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error fetching scores: $e');
+      setState(() => isLoading = false);
+    }
   }
 
   @override
   void initState() {
     super.initState();
     _menuController = AnimationController(duration: const Duration(milliseconds: 800), vsync: this);
-
     _menuScaleAnimation = CurvedAnimation(parent: _menuController, curve: Curves.elasticOut).drive(Tween<double>(begin: _titleScale, end: 1.0));
 
     _slideAnimation = Tween<Offset>(
@@ -72,13 +67,14 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _menuController, curve: Curves.easeOutCubic));
 
-    // Start animations after build
+    // Start animations and fetch scores
     Future.delayed(const Duration(milliseconds: 200), () {
       setState(() {
         _visible = true;
         _titleScale = 1.0;
       });
       _menuController.forward();
+      _fetchHighScores();
     });
   }
 
@@ -90,8 +86,6 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
-    final highScores = _getHighScores();
-
     return Scaffold(
       appBar: AppBar(backgroundColor: Colors.black, title: Text(widget.title), centerTitle: true),
       backgroundColor: Colors.black,
@@ -105,7 +99,7 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
               child: const Text('GALAGA', style: TextStyle(fontSize: 48, color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 8)),
             ),
 
-            // Animated High Scores ListView with slide effect
+            // High Scores section with loading state
             SlideTransition(
               position: _slideAnimation,
               child: FadeTransition(
@@ -121,27 +115,36 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
                   width: 300,
                   child: Column(
                     children: [
-                      const Text('High Scores', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('High Scores', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                          if (isLoading) const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                        ],
+                      ),
                       const SizedBox(height: 10),
                       Expanded(
-                        child: ListView.builder(
-                          itemCount: highScores.length,
-                          itemBuilder: (context, index) {
-                            final score = highScores[index];
-                            return Container(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              decoration: BoxDecoration(color: index.isEven ? Colors.blue.withOpacity(0.1) : Colors.transparent),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text('#${index + 1}', style: const TextStyle(color: Colors.white70)),
-                                  Text('${score.score}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                  Text(score.date, style: const TextStyle(color: Colors.white70)),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
+                        child:
+                            isLoading
+                                ? const Center(child: Text('Loading scores...', style: TextStyle(color: Colors.white70)))
+                                : ListView.builder(
+                                  itemCount: highScores.length,
+                                  itemBuilder: (context, index) {
+                                    final score = highScores[index];
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      decoration: BoxDecoration(color: index.isEven ? Colors.blue.withOpacity(0.1) : Colors.transparent),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text('#${index + 1}', style: const TextStyle(color: Colors.white70)),
+                                          Text('${score.score}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                          Text(score.date, style: const TextStyle(color: Colors.white70)),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
                       ),
                     ],
                   ),
@@ -157,7 +160,7 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
                 child: Container(
                   margin: const EdgeInsets.all(20),
                   child: ElevatedButton(
-                    onPressed: () => Navigator.of(context).pushNamed('/game'),
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => GalagaGame(onGameEnd: () => _fetchHighScores()))),
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15)),
                     child: const Text('START GAME', style: TextStyle(fontSize: 24, letterSpacing: 2, color: Colors.white)),
                   ),

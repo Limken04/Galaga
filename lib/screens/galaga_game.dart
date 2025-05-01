@@ -1,6 +1,10 @@
 import 'dart:async';
 import 'dart:math';
+
 import 'package:flutter/material.dart';
+
+import '../models/score_model.dart';
+import '../services/score_service.dart';
 
 /// Home screen with game start menu
 class HomeScreen extends StatelessWidget {
@@ -56,15 +60,59 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
+class SpaceshipPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint =
+        Paint()
+          ..color = Colors.blue
+          ..style = PaintingStyle.fill;
+
+    final shipPath = Path();
+
+    // Draw spaceship body
+    shipPath.moveTo(size.width / 2, 0); // Top point
+    shipPath.lineTo(size.width, size.height); // Bottom right
+    shipPath.lineTo(size.width * 0.8, size.height * 0.8); // Inner right
+    shipPath.lineTo(size.width * 0.2, size.height * 0.8); // Inner left
+    shipPath.lineTo(0, size.height); // Bottom left
+    shipPath.close();
+
+    // Draw the ship with glow effect
+    final glowPaint =
+        Paint()
+          ..color = Colors.blue.withOpacity(0.3)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.outer, 10);
+
+    canvas.drawPath(shipPath, glowPaint);
+    canvas.drawPath(shipPath, paint);
+
+    // Add engine glow
+    final enginePaint =
+        Paint()
+          ..color = Colors.lightBlueAccent
+          ..style = PaintingStyle.fill;
+
+    canvas.drawCircle(Offset(size.width * 0.5, size.height * 0.7), size.width * 0.15, enginePaint);
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
+}
+
 /// Main Galaga game screen with stateful behavior
 class GalagaGame extends StatefulWidget {
-  const GalagaGame({super.key});
+  final VoidCallback? onGameEnd;
+
+  const GalagaGame({super.key, this.onGameEnd});
 
   @override
   State<GalagaGame> createState() => _GalagaGameState();
 }
 
 class _GalagaGameState extends State<GalagaGame> with TickerProviderStateMixin {
+  final ScoreService _scoreService = ScoreService();
+  bool _isSubmittingScore = false;
   // Game state variables
   double playerX = 0.0;
   final double playerWidth = 50.0;
@@ -213,6 +261,7 @@ class _GalagaGameState extends State<GalagaGame> with TickerProviderStateMixin {
     isGameOver = true;
     gameTimer?.cancel();
     _controller.forward(); // Animate Game Over
+    _submitScore(); // Submit score when game ends
   }
 
   /// Shoots a bullet from the player's current position
@@ -278,6 +327,23 @@ class _GalagaGameState extends State<GalagaGame> with TickerProviderStateMixin {
       });
       explosionController.dispose();
     });
+  }
+
+  Future<void> _submitScore() async {
+    if (_isSubmittingScore) return;
+
+    setState(() => _isSubmittingScore = true);
+
+    final scoreData = ScoreData(score, DateTime.now().toString().split(' ')[0]);
+
+    try {
+      final success = await _scoreService.submitScore(scoreData);
+      if (success) {
+        widget.onGameEnd?.call();
+      }
+    } finally {
+      setState(() => _isSubmittingScore = false);
+    }
   }
 
   @override
@@ -374,15 +440,7 @@ class _GalagaGameState extends State<GalagaGame> with TickerProviderStateMixin {
                                 return Positioned(
                                   bottom: 20 + _shipHoverAnimation.value,
                                   left: (gameWidth / 2) + (playerX * gameWidth / 2) - playerWidth / 2,
-                                  child: Container(
-                                    width: playerWidth,
-                                    height: playerHeight,
-                                    decoration: BoxDecoration(
-                                      color: Colors.blue,
-                                      borderRadius: BorderRadius.circular(10),
-                                      boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.5), spreadRadius: 2, blurRadius: 5)],
-                                    ),
-                                  ),
+                                  child: CustomPaint(size: Size(playerWidth, playerHeight), painter: SpaceshipPainter()),
                                 );
                               },
                             ),
@@ -461,6 +519,25 @@ class _GalagaGameState extends State<GalagaGame> with TickerProviderStateMixin {
                                         Text('Final Level: $level', style: const TextStyle(fontSize: 24, color: Colors.white)),
                                         const SizedBox(height: 10),
                                         Text('Final Score: $score', style: const TextStyle(fontSize: 24, color: Colors.white)),
+                                        if (_isSubmittingScore)
+                                          Container(
+                                            margin: const EdgeInsets.only(top: 20),
+                                            child: const Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                SizedBox(
+                                                  width: 20,
+                                                  height: 20,
+                                                  child: CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                                  ),
+                                                ),
+                                                SizedBox(width: 10),
+                                                Text('Submitting score...', style: TextStyle(color: Colors.white70)),
+                                              ],
+                                            ),
+                                          ),
                                         const SizedBox(height: 30),
                                         ElevatedButton(
                                           onPressed: () {
